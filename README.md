@@ -1,1 +1,1 @@
-# EfficientNet-pyorch
+# EfficientNet-pytorch
