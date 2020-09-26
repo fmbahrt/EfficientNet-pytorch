@@ -64,7 +64,15 @@ def round_repeats(repeats, depth_coefficient):
 
 class EfficientNet(nn.Module):
 
-    def __init__(self, phi=0, with_relu=True):
+    """ TODO
+    arguments:
+        drop_connect_rate: float, survival probability for the last conv block
+    """
+
+    def __init__(self,
+                 phi=0,
+                 drop_connect_rate=0.2,
+                 with_relu=True):
 
         super(EfficientNet, self).__init__()
 
@@ -93,17 +101,21 @@ class EfficientNet(nn.Module):
         # Update image_size
         image_size = calculate_output_image_size(image_size, 2)
 
-        num_blocks_total = sum(block_arg.num_repeat for block_arg in block_args)
-
+        num_blocks_total = sum(round_repeats(block_arg.num_repeat,
+                                             depth_coefficient) for block_arg in block_args)
         # Use relu for the first half of the network
         #  it is efficientnet after all
         relu_half = num_blocks_total // 2
 
         blocks = []
         last_block = None
+        # Block num is used to calculate drop_connect_rate. We start at 0 such
+        # that the first block has a survival probability of 1
+        block_num = 0
         for idx, block_arg in enumerate(block_args):
 
-            use_swish = ((idx + 1) >= relu_half) and with_relu
+            # negate bool because I am weird
+            use_swish = not(((block_num + 1) >= relu_half) and with_relu)
 
             # Update block input and output filters based on depth multiplier.
             block_arg = block_arg._replace(
@@ -116,6 +128,9 @@ class EfficientNet(nn.Module):
 
             last_block = block_arg
 
+            # Calculate drop_connect_rate linearly
+            drop_rate = drop_connect_rate * block_num / num_blocks_total
+
             # Construct first block
             block = InvertedResidualBlock(
                 block_arg.input_filters,
@@ -126,12 +141,13 @@ class EfficientNet(nn.Module):
                 se_ratio=block_arg.se_ratio,
                 skip_connect=block_arg.id_skip,
                 image_size=image_size,
+                drop_rate=drop_rate,
                 swish=use_swish
             )
             blocks.append(block)
             image_size = calculate_output_image_size(image_size,
                                                      block_arg.strides)
-
+            block_num += 1
             if block_arg.num_repeat > 1:
                 # only the first block takes care of strid and filter size increase
                 block_arg = block_arg._replace(
@@ -139,7 +155,12 @@ class EfficientNet(nn.Module):
                     strides=[1,1]
                 )
 
+
                 for bidx in range(block_arg.num_repeat - 1):
+
+                    # Calculate drop_connect_rate linearly
+                    drop_rate = drop_connect_rate * block_num / num_blocks_total
+
                     block = InvertedResidualBlock(
                         block_arg.input_filters,
                         block_arg.output_filters,
@@ -149,9 +170,11 @@ class EfficientNet(nn.Module):
                         se_ratio=block_arg.se_ratio,
                         skip_connect=block_arg.id_skip,
                         image_size=image_size,
+                        drop_rate=drop_rate,
                         swish=use_swish
                     )
                     blocks.append(block)
+                    block_num += 1
         self._blocks = nn.Sequential(*blocks)
 
         # Classification
@@ -187,15 +210,15 @@ class EfficientNet(nn.Module):
 
 if __name__ == '__main__':
     import time
-    inz = torch.randn(32, 3, 224, 224)
+    inz = torch.randn(32, 3, 260, 260)
 
-    model = EfficientNet(phi=6, with_relu=False)
+    model = EfficientNet(phi=2, with_relu=False)
 
     start = time.time()
-    for i in range(15):
+    for i in range(5):
         x = model(inz)
         print(x.shape)
-    end = (time.time() - start) / 15.
+    end = time.time() - start
 
     print(end)
 

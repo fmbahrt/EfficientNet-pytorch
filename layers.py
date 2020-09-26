@@ -96,6 +96,33 @@ class SEBlock(nn.Module):
         # Now weigh each channel
         return x * z
 
+class DropConnect(nn.Module):
+
+    def __init__(self, drop_rate):
+        assert 0 <= drop_rate <= 1, "drop_rate must be in the range [0, 1]"
+
+        super(DropConnect, self).__init__()
+
+        self.drop_rate = drop_rate
+
+    def forward(self, x):
+        if self.training:
+            batch_size = x.shape[0]
+            keep_prob = 1 - self.drop_rate
+
+            # This is perhaps a weird way to produce the mask and can perhaps be
+            # done better...
+            # generate binary_tensor mask according to probability (p for 0, 1-p for 1)
+            random_tensor = keep_prob
+            random_tensor += torch.rand([batch_size, 1, 1, 1], dtype=x.dtype,
+                                        device=x.device)
+            binary_tensor = torch.floor(random_tensor)
+
+            # From a model ensemble perspective we recalibrate the input tensor
+            # during training such that we do not have to do it during testing.
+            x = x / keep_prob * binary_tensor
+        return x
+
 class InvertedResidualBlock(nn.Module):
 
     def __init__(self,
@@ -107,6 +134,7 @@ class InvertedResidualBlock(nn.Module):
                  se_ratio=0.25,
                  image_size=None,
                  skip_connect=True,
+                 drop_rate=0.0,
                  swish=False):
         super(InvertedResidualBlock, self).__init__()
 
@@ -120,6 +148,9 @@ class InvertedResidualBlock(nn.Module):
         self.expand_ratio = expand_ratio
 
         se = ((se_ratio is not None) and (0 < se_ratio <=1))
+
+        # Drop connect
+        self._drop_connect = DropConnect(drop_rate) if drop_rate>0 else nn.Identity()
 
         # Channel Expansion
         self._conv_exp = Conv2d(inp, hiddendim,
@@ -178,6 +209,13 @@ class InvertedResidualBlock(nn.Module):
         # If input dim equal output dim then we use a residual connection
         #  as stated in mobilenetv2 paper
         if self.skip_connect and self.inp == self.oup and self.stride == 1:
-            x = ins + x
+            # We uses drop connect if a skip connection exists
+            x = ins + self._drop_connect(x)
 
         return x
+
+if __name__ == '__main__':
+    inz = torch.randn(4, 3, 7, 7)
+
+    m = DropConnect(drop_rate=0.0)
+    x = m(inz)
