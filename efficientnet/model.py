@@ -71,6 +71,7 @@ class EfficientNet(nn.Module):
 
     def __init__(self,
                  phi=0,
+                 num_classes=1000,
                  drop_connect_rate=0.2,
                  bn_mom=0.99,
                  bn_eps=1e-3,
@@ -200,7 +201,7 @@ class EfficientNet(nn.Module):
         # Final layer
         self._pooling = nn.AdaptiveAvgPool2d(1)
         self._dropout = nn.Dropout(drop_connect_rate)
-        self._logits  = nn.Linear(out_filters, 1000)
+        self._logits  = nn.Linear(out_filters, num_classes)
 
     def forward(self, x):
         x = self._stem(x)
