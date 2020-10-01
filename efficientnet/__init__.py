@@ -23,8 +23,9 @@ _CONFIG_TO_PHI = {
     Config.B7 : 7
 }
 
-def EfficientNet(cfg, with_relu=False):
+def EfficientNet(cfg, num_classes=1000, with_relu=False):
     """Constructs an EfficientNet instance"""
     assert isinstance(cfg, Config)
     return EffNet(phi=_CONFIG_TO_PHI[cfg],
+                  num_classes=num_classes,
                   with_relu=with_relu)
