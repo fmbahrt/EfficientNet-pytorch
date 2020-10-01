@@ -135,8 +135,13 @@ class InvertedResidualBlock(nn.Module):
                  image_size=None,
                  skip_connect=True,
                  drop_rate=0.0,
+                 bn_mom=0.99,
+                 bn_eps=1e-3,
                  swish=False):
         super(InvertedResidualBlock, self).__init__()
+
+        # BatchNorm parameters
+        bn_mom = 1 - bn_mom
 
         hiddendim = inp * expand_ratio
 
@@ -158,7 +163,7 @@ class InvertedResidualBlock(nn.Module):
                                 stride=1,
                                 bias=False,
                                 image_size=image_size)
-        self._bn_exp = nn.BatchNorm2d(hiddendim)
+        self._bn_exp = nn.BatchNorm2d(hiddendim, momentum=bn_mom, eps=bn_eps)
         self._act_exp = nn.Hardswish() if swish else nn.ReLU()
 
         self._expand_block = nn.Sequential(
@@ -174,7 +179,7 @@ class InvertedResidualBlock(nn.Module):
         self._depth = Conv2d(in_channels=hiddendim, out_channels=hiddendim,
                                 groups=hiddendim, kernel_size=kernel_size,
                                 stride=stride, image_size=image_size, bias=False)
-        self._bn_depth = nn.BatchNorm2d(hiddendim)
+        self._bn_depth = nn.BatchNorm2d(hiddendim, momentum=bn_mom, eps=bn_eps)
         self._act_depth = nn.Hardswish() if swish else nn.ReLU()
 
         # Calculate new image size since stride is handled by depthwise
@@ -187,7 +192,7 @@ class InvertedResidualBlock(nn.Module):
         self._proj = Conv2d(in_channels=hiddendim, out_channels=oup,
                             kernel_size=1, stride=1, bias=False,
                             image_size=image_size)
-        self._bn_proj = nn.BatchNorm2d(oup)
+        self._bn_proj = nn.BatchNorm2d(oup, momentum=bn_mom, eps=bn_eps)
 
     def forward(self, x):
         ins = x

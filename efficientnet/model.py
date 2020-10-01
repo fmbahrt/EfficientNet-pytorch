@@ -4,7 +4,7 @@ import torch.nn as nn
 import math
 import collections
 
-from layers import InvertedResidualBlock, Conv2d, calculate_output_image_size
+from .layers import InvertedResidualBlock, Conv2d, calculate_output_image_size
 
 # Kindly stolen from : https://github.com/qubvel/efficientnet
 BlockArgs = collections.namedtuple('BlockArgs', [
@@ -72,9 +72,14 @@ class EfficientNet(nn.Module):
     def __init__(self,
                  phi=0,
                  drop_connect_rate=0.2,
+                 bn_mom=0.99,
+                 bn_eps=1e-3,
                  with_relu=True):
 
         super(EfficientNet, self).__init__()
+
+        # BatchNorm parameters
+        bn_mom = 1 - bn_mom
 
         width_coefficient, depth_coefficient, image_size, droprate = MODEL_PARAMS[phi]
 
@@ -89,7 +94,8 @@ class EfficientNet(nn.Module):
                                  stride=2,
                                  bias=False,
                                  image_size=image_size)
-        self._stem_bn = nn.BatchNorm2d(stem_filters)
+        self._stem_bn = nn.BatchNorm2d(stem_filters, momentum=bn_mom,
+                                       eps=bn_eps)
         self._stem_act = nn.Hardswish()
 
         self._stem = nn.Sequential(
@@ -183,7 +189,8 @@ class EfficientNet(nn.Module):
 
         self._class_conv = Conv2d(in_filters, out_filters, kernel_size=1,
                                  bias=False, stride=1, image_size=image_size)
-        self._class_bn = nn.BatchNorm2d(out_filters)
+        self._class_bn = nn.BatchNorm2d(out_filters, momentum=bn_mom,
+                                        eps=bn_eps)
 
         self._head = nn.Sequential(
             self._class_conv,
@@ -192,7 +199,7 @@ class EfficientNet(nn.Module):
 
         # Final layer
         self._pooling = nn.AdaptiveAvgPool2d(1)
-        self._dropout = nn.Dropout(0.2)
+        self._dropout = nn.Dropout(drop_connect_rate)
         self._logits  = nn.Linear(out_filters, 1000)
 
     def forward(self, x):
@@ -212,7 +219,7 @@ if __name__ == '__main__':
     import time
     inz = torch.randn(32, 3, 260, 260)
 
-    model = EfficientNet(phi=2, with_relu=False)
+    model = EfficientNet(phi=0, with_relu=False)
 
     start = time.time()
     for i in range(5):
