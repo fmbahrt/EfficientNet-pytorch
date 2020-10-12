@@ -101,6 +101,7 @@ def train(epoch):
         outputs = model(inputs)
         loss    = criterion(outputs, labels)
         loss.backward()
+        opt.step()
 
         train_loss += loss.item()
         _, predicted = outputs.max(1)
