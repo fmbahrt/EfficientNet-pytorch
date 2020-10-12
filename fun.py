@@ -34,6 +34,8 @@ if args.timm:
 else:
     model = EfficientNet(Config.B0, num_classes=10)
 
+model.to(device)
+
 # some data fun
 transform = transforms.Compose(
     [
